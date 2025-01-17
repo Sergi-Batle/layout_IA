@@ -3,7 +3,5 @@ modelo de machine learning layoutlm de microsoft
 
  Ejemplo:
 
- https://github.com/Sergi-Batle/layout_IA/blob/master/ejemplo.png
-
- ![Alt text](https://github.com/Sergi-Batle/layout_IA/blob/master/ejemplo.PNG)
+ ![Alt text](https://github.com/Sergi-Batle/layout_IA/blob/master/ejemplo.png)
  
