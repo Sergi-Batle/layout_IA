@@ -5,5 +5,5 @@ modelo de machine learning layoutlm de microsoft
 
  https://github.com/Sergi-Batle/layout_IA/blob/master/ejemplo.png
 
- ![Alt text]( https://github.com/Sergi-Batle/layout_IA/blob/master/ejemplo.png "prediction")
+ ![Alt text](https://github.com/Sergi-Batle/layout_IA/blob/master/ejemplo.png)
  
