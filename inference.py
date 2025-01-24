@@ -31,7 +31,7 @@ model_path = 'layoutlm.pt'
 model = model_load(model_path, num_labels)
 
 # Preprocesamiento de la imagen
-image, words, boxes, actual_boxes = preprocess(rf"images\dhl_2.png")
+image, words, boxes, actual_boxes = preprocess(rf"dataset\training_data\images\TC_page_1.png")
 word_level_predictions, final_boxes = convert_to_features(image, words, boxes, actual_boxes, model)
 
 # Configuración de colores y fuente

@@ -4,11 +4,13 @@ import json, fitz
 import pdfminer
 from pdfminer.pdfpage import PDFPage
 from pdfminer.pdfinterp import PDFPageInterpreter
-from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTChar, LTTextBoxVertical, LTFigure
+from pdfminer.layout import LAParams, LTTextBox, LTTextLine, LTChar, LTTextBoxVertical, LTFigure, LTTextLineHorizontal, LTTextBoxHorizontal
 from pdfminer.converter import PDFPageAggregator
 from pathlib import Path
 import cv2 as cv
 import numpy as np
+from visualizar import main
+
 # Datos de ejemplo
 data = {
     "cod_factura": "BC52024030628",
@@ -45,7 +47,7 @@ def get_clave(valor_buscado):
     return clave if clave else None
 
 
-def get_text_and_coordinates(pdf_path, scale_factor=0.5, flip_vertical=True):
+def get_text_and_coordinates(pdf_path):
     with open(pdf_path, 'rb') as fp:
         # Create PDF parser
         parser = pdfminer.pdfparser.PDFParser(fp)
@@ -68,25 +70,20 @@ def get_text_and_coordinates(pdf_path, scale_factor=0.5, flip_vertical=True):
         # Function to parse objects and extract word-level information
         def parse_obj(lt_objects, page_height):
             for obj in lt_objects:                                                               
-                if isinstance(obj, LTTextBox):
+                if isinstance(obj, (LTTextBox)):
+                    words = []
                     for line in obj:
-                        if isinstance(line, (LTTextLine, LTTextBoxVertical)):
-                            words = []
+                        if isinstance(line, (LTTextLine, LTTextBoxVertical, LTTextLineHorizontal)):                           
                             current_word = ""
-                            current_word_bbox = [float('inf'), float('inf'), float('-inf'), float('-inf')]
+                            current_word_bbox = [float('inf'), float('inf'), float('-inf'), float('-inf')]               
 
                             for char in line:
                                 if isinstance(char, LTChar):
                                     if char.get_text().isspace():
                                         if current_word:
-                                            # Adjust bounding box coordinates for vertical flip
-                                            if flip_vertical:
-                                                current_word_bbox[1] = page_height - current_word_bbox[1]  # Flip the Y-min
-                                                current_word_bbox[3] = page_height - current_word_bbox[3]  # Flip the Y-max
-                                            
                                             words.append({
                                                 "text": current_word,
-                                                "box": [int(coord * scale_factor) for coord in current_word_bbox]  # Apply scale factor
+                                                "box": [int(coord) for coord in current_word_bbox]
                                             })
                                             current_word = ""
                                             current_word_bbox = [float('inf'), float('inf'), float('-inf'), float('-inf')]
@@ -96,33 +93,36 @@ def get_text_and_coordinates(pdf_path, scale_factor=0.5, flip_vertical=True):
                                         current_word_bbox[1] = min(current_word_bbox[1], char.bbox[1])
                                         current_word_bbox[2] = max(current_word_bbox[2], char.bbox[2])
                                         current_word_bbox[3] = max(current_word_bbox[3], char.bbox[3])
-
-                            # Apply the flip to the last word in the line
+                                           
                             if current_word:
-                                if flip_vertical:
-                                    current_word_bbox[1] = page_height - current_word_bbox[1]
-                                    current_word_bbox[3] = page_height - current_word_bbox[3]
-
                                 words.append({
                                     "text": current_word,
-                                    "box": [int(coord * scale_factor) for coord in current_word_bbox]  # Apply scale factor
+                                    "box": current_word_bbox
                                 })
-
-                            for word in words:
-                                label = "others"
-                                clean_word = str(word["text"]).strip().replace("%", "")
+                    
                                 
-                                if clean_word in dades:
-                                    label = get_clave(clean_word)
-                                 
-                                form_data.append({
-                                    "box": word["box"],  # Keep the original format [x0, y0, x1, y1]
-                                    "text": word["text"],
-                                    "label": label,
-                                    "words": [word],
-                                    "linking": [],
-                                    "id": str(uuid.uuid4())
-                                })
+                    for word in words:
+                        label = "others"
+                        clean_word = str(word["text"]).strip().replace("%", "")
+                        
+                        if (clean_word in dades):
+                            label = get_clave(clean_word)
+                        
+                        # Invertir las coordenadas verticales
+                        word["box"][1] = int(page_height - word["box"][1])
+                        word["box"][3] = int(page_height - word["box"][3])
+                        word["box"][1], word["box"][3] = int(word["box"][3]), int(word["box"][1])
+                        
+                        word["box"][0] = int(word["box"][0])
+                        word["box"][2] = int(word["box"][2])   
+                        form_data.append({
+                            "box": word["box"],  
+                            "text": word["text"],
+                            "label": label,
+                            "words": [word],
+                            "linking": [],
+                            "id": str(uuid.uuid4())
+                        })
                 elif isinstance(obj, LTFigure):
                     parse_obj(obj._objs, page_height)
 
@@ -140,28 +140,21 @@ def get_text_and_coordinates(pdf_path, scale_factor=0.5, flip_vertical=True):
         return {"form": form_data}
 
 
-
-def save_image_from_pixmap(pix, output_dir, filename, scale_factor=0.5):
-    # Redimensionar la imagen basada en el factor de escala
+def save_image_from_pixmap(pix, output_dir, filename):
+    # Convertir la imagen desde el buffer
     img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
     
     # Si la imagen tiene un canal alfa (transparente), la convertimos a BGR
     if pix.n == 4:
         img = cv.cvtColor(img, cv.COLOR_BGRA2BGR)
     
-    # Aplicar el factor de escala a la imagen
-    new_width = int(pix.width * scale_factor)
-    new_height = int(pix.height * scale_factor)
-    img_rescaled = cv.resize(img, (new_width, new_height), interpolation=cv.INTER_AREA)
-    
     # Asegurarnos de que el directorio de salida exista
     os.makedirs(output_dir, exist_ok=True)
     
-    # Guardar la imagen escalada
+    # Guardar la imagen sin escalar
     output_path = os.path.join(output_dir, filename)
-    cv.imwrite(output_path, img_rescaled)
+    cv.imwrite(output_path, img)
     print(f"Image saved to {output_path}")
-
     
     
 def save_annotation(output_dir, json_data, json_filename):
@@ -200,3 +193,5 @@ pdf_files = pdf_dir.glob("*.pdf")
 for pdf_file in pdf_files:
     create_json(pdf_file)
     create_images(pdf_file)
+
+main()    
